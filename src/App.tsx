@@ -51,7 +51,8 @@ function App() {
 
     setLoadingSuggestions(true);
     try {
-      const response = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`);
+      const url = `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setSuggestions(data.data || []);
@@ -74,6 +75,31 @@ function App() {
   };
 
   const debouncedFetchSuggestions = debounce(fetchSuggestions, 300);
+
+  // Retry function with exponential backoff
+  const fetchWithRetry = async (url: string, maxRetries: number = 3): Promise<any> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+      } catch (error) {
+        const isLastAttempt = attempt === maxRetries;
+        
+        if (isLastAttempt) {
+          throw error;
+        }
+        
+        // Exponential backoff: wait 1s, then 2s, then 4s
+        const waitTime = Math.pow(2, attempt - 1) * 1000;
+        console.warn(`Attempt ${attempt} failed, retrying in ${waitTime}ms...`, error);
+        
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -106,13 +132,7 @@ function App() {
           
           // Use CORS proxy directly since Shopify APIs always block direct calls
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
-          const response = await fetch(proxyUrl);
-
-          if (!response.ok) {
-            throw new Error(`${store.name} search failed`);
-          }
-
-          const data = await response.json();
+          const data = await fetchWithRetry(proxyUrl, 3);
           
           // Parse Shopify predictive search response
           const products = data?.resources?.results?.products || [];
@@ -132,7 +152,7 @@ function App() {
           
           return results;
         } catch (error) {
-          console.warn(`Error searching ${store.name}:`, error);
+          console.warn(`Failed to search ${store.name} after retries:`, error);
           return [];
         }
       });
