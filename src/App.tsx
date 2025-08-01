@@ -355,28 +355,6 @@ function App() {
           </div>
         )}
       </main>
-
-      {/* Footer */}
-      <footer className="bg-black/20 backdrop-blur-sm border-t border-purple-500/20 mt-16">
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="text-center text-purple-300">
-            <p className="mb-4">Searching across your local hobby stores:</p>
-            <div className="flex justify-center space-x-8">
-              {stores.map((store) => (
-                <a
-                  key={store.key}
-                  href={store.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-white transition-colors"
-                >
-                  {store.name}
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
