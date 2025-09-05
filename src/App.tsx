@@ -254,17 +254,6 @@ function App() {
       
       if (totalFound === 0 && totalNotFound === 0 && totalNoInventory === 0) {
         setError('No cards found. Please check your search terms.');
-      } else {
-        let message = '';
-        if (totalNotFound > 0) {
-          message += `${totalNotFound} card(s) not recognized. `;
-        }
-        if (totalNoInventory > 0) {
-          message += `${totalNoInventory} card(s) found but no inventory available. `;
-        }
-        if (message) {
-          setError(message.trim());
-        }
       }
     } catch (error) {
       setError('An error occurred while searching. Please try again.');
@@ -482,9 +471,9 @@ function App() {
                 Search Results
               </h3>
               <div className="text-purple-300 text-sm">
-                {searchResults.filter(r => r.status === 'found').length} cards with inventory • {' '}
-                {searchResults.filter(r => r.status === 'not_found').length} unrecognized • {' '}
-                {searchResults.filter(r => r.status === 'no_inventory').length} no inventory
+                {searchResults.filter(r => r.status === 'found').length} cards found • {' '}
+                {searchResults.filter(r => r.status === 'no_inventory').length} no inventory • {' '}
+                {searchResults.filter(r => r.status === 'not_found').length} unrecognized 
               </div>
             </div>
 
