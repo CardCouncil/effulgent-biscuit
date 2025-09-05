@@ -229,11 +229,25 @@ function App() {
     setShowSuggestions(false);
 
     try {
-      const searchPromises = cardsToSearch.map(cardName => searchSingleCard(cardName));
-      const results = await Promise.all(searchPromises);
+      const results: CardSearchResult[] = [];
       
-      setSearchResults(results);
-
+      // Process cards sequentially with delay
+      for (let i = 0; i < cardsToSearch.length; i++) {
+        const cardName = cardsToSearch[i];
+        
+        // Add delay between requests (except for the first one)
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        const result = await searchSingleCard(cardName);
+        results.push(result);
+        
+        // Update results immediately as each card is processed
+        setSearchResults([...results]);
+      }
+      
+      // Final error summary after all cards are processed
       const totalFound = results.filter(r => r.status === 'found').length;
       const totalNotFound = results.filter(r => r.status === 'not_found').length;
       const totalNoInventory = results.filter(r => r.status === 'no_inventory').length;
