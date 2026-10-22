@@ -7,4 +7,10 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  server: {
+    // Local dev: forward /api to the Azure Functions host (`npm run dev:api`).
+    proxy: {
+      '/api': 'http://localhost:7071',
+    },
+  },
 });

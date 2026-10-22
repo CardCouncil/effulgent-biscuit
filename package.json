@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "cd api && npm install && func start",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

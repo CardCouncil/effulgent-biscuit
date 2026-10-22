@@ -1,0 +1,13 @@
+{
+  "name": "effulgent-biscuit-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Server-side proxy for Shopify store search",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.7.0"
+  }
+}
