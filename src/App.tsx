@@ -14,9 +14,57 @@ interface CardResult {
 
 interface CardSearchResult {
   cardName: string;
+  quantity: number;
   status: 'found' | 'not_found' | 'no_inventory';
   results: CardResult[];
 }
+
+interface CardEntry {
+  name: string;
+  quantity: number;
+}
+
+// Parses a bulk card list, one card per line. Supported line formats:
+//   "Card Name"            -> quantity 1
+//   "8 Mountain"           -> [QTY] [SPACE] [CARD NAME]
+//   "4x Lightning Bolt"    -> "x" after the quantity is also accepted
+// Deck-export extras are tolerated: trailing set/collector info ("Sol Ring (CMM) 400"),
+// foil markers ("*F*"), section headers ("Commander", "Sideboard:") and "//" comments.
+// Repeated card names are merged and their quantities summed.
+const parseCardList = (text: string): CardEntry[] => {
+  const entries = new Map<string, CardEntry>();
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    let line = rawLine.trim();
+    if (!line || line.startsWith('//') || line.startsWith('#')) continue;
+    if (/^(commander|companion|deck|main|mainboard|sideboard|maybeboard|considering)\s*:?\s*(\(\d+\))?$/i.test(line)) continue;
+
+    let quantity = 1;
+    // 1-3 digits so names like "1996 World Champion" aren't read as a quantity
+    const qtyMatch = line.match(/^(\d{1,3})\s*[xX]?\s+(.+)$/);
+    if (qtyMatch) {
+      quantity = parseInt(qtyMatch[1], 10);
+      line = qtyMatch[2];
+    }
+
+    const name = line
+      .replace(/\s+\*[A-Za-z]+\*\s*$/, '')
+      .replace(/\s+\([A-Za-z0-9]{2,6}\)(\s+[\w-]+)?\s*$/, '')
+      .trim();
+    if (!name || quantity < 1) continue;
+
+    const key = name.toLowerCase();
+    const existing = entries.get(key);
+    if (existing) {
+      existing.quantity += quantity;
+    } else {
+      entries.set(key, { name, quantity });
+    }
+  }
+
+  return [...entries.values()];
+};
+
 function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [cardList, setCardList] = useState('');
@@ -155,13 +203,14 @@ function App() {
     }
   };
 
-  const searchSingleCard = async (cardName: string): Promise<CardSearchResult> => {
+  const searchSingleCard = async (cardName: string, quantity: number = 1): Promise<CardSearchResult> => {
     // First validate the card name exists
     const isValidCard = await validateCardName(cardName);
     
     if (!isValidCard) {
       return {
         cardName,
+        quantity,
         status: 'not_found',
         results: []
       };
@@ -208,15 +257,16 @@ function App() {
     
     return {
       cardName,
+      quantity,
       status: flatResults.length > 0 ? 'found' : 'no_inventory',
       results: flatResults.sort((a, b) => a.priceMin - b.priceMin)
     };
   };
 
   const searchCards = async () => {
-    const cardsToSearch = searchMode === 'single' 
-      ? [searchTerm.trim()]
-      : cardList.split('\n').map(card => card.trim()).filter(card => card !== '');
+    const cardsToSearch: CardEntry[] = searchMode === 'single'
+      ? (searchTerm.trim() ? [{ name: searchTerm.trim(), quantity: 1 }] : [])
+      : parseCardList(cardList);
 
     if (cardsToSearch.length === 0) {
       setError(searchMode === 'single' ? 'Please enter a card name to search' : 'Please enter at least one card name');
@@ -233,14 +283,14 @@ function App() {
       
       // Process cards sequentially with delay
       for (let i = 0; i < cardsToSearch.length; i++) {
-        const cardName = cardsToSearch[i];
+        const { name: cardName, quantity } = cardsToSearch[i];
         
         // Add delay between requests (except for the first one)
         if (i > 0) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
         
-        const result = await searchSingleCard(cardName);
+        const result = await searchSingleCard(cardName, quantity);
         results.push(result);
         
         // Update results immediately as each card is processed
@@ -309,6 +359,9 @@ function App() {
         return 'No inventory available';
     }
   };
+
+  const parsedCardList = parseCardList(cardList);
+  const totalCopies = parsedCardList.reduce((sum, card) => sum + card.quantity, 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -408,12 +461,12 @@ function App() {
                 {/* Card List Textarea */}
                 <div>
                   <label className="block text-purple-300 text-sm font-medium mb-2">
-                    Card List (one per line):
+                    Card List (one per line, optional quantity first):
                   </label>
                   <textarea
                     value={cardList}
                     onChange={(e) => setCardList(e.target.value)}
-                    placeholder="Enter card names, one per line..."
+                    placeholder={"1 Clifftop Retreat\n1 Smoldering Marsh\n8 Mountain\n1 Command Tower\nLightning Bolt"}
                     rows={8}
                     className="w-full p-4 bg-white/10 border border-purple-500/30 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-none"
                   />
@@ -435,8 +488,8 @@ function App() {
                 <>
                   <Search className="w-5 h-5" />
                   <span>
-                    Search All Stores{searchMode === 'list' && cardList.trim() 
-                      ? ` (${cardList.split('\n').filter(card => card.trim() !== '').length} cards)`
+                    Search All Stores{searchMode === 'list' && parsedCardList.length > 0
+                      ? ` (${parsedCardList.length} cards${totalCopies !== parsedCardList.length ? `, ${totalCopies} copies` : ''})`
                       : ''
                     }
                   </span>
@@ -481,7 +534,12 @@ function App() {
               <div key={cardIndex} className="bg-black/20 rounded-2xl p-6 border border-purple-500/20">
                 {/* Card Header */}
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-xl font-bold text-white">{cardResult.cardName}</h4>
+                  <h4 className="text-xl font-bold text-white">
+                    {cardResult.quantity > 1 && (
+                      <span className="text-purple-300 mr-2">{cardResult.quantity}×</span>
+                    )}
+                    {cardResult.cardName}
+                  </h4>
                   <div className="flex items-center space-x-2">
                     {getStatusIcon(cardResult.status)}
                     <span className="text-sm text-purple-300">{getStatusText(cardResult.status)}</span>
