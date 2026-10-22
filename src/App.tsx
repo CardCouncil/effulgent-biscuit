@@ -80,20 +80,17 @@ function App() {
     { 
       name: 'Players C&C', 
       key: 'playerscandc', 
-      url: 'https://playerscandc.com/',
-      suggestApiUrl: 'https://playerscandc.com/search/suggest.json?q={term}&resources[type]=product&resources[limit]=10&section_id=predictive-search'
+      url: 'https://playerscandc.com/'
     },
     { 
       name: 'Mana Lounge', 
       key: 'manalounge', 
-      url: 'https://www.manalounge.ca/',
-      suggestApiUrl: 'https://www.manalounge.ca/search/suggest.json?q={term}&resources[type]=product&resources[limit]=10&section_id=predictive-search'
+      url: 'https://www.manalounge.ca/'
     },
     { 
       name: 'Lamood Comics', 
       key: 'lamoodcomics', 
-      url: 'https://lamoodcomics.ca/',
-      suggestApiUrl: 'https://lamoodcomics.ca/search/suggest.json?q={term}&resources[type]=product&resources[limit]=10&section_id=predictive-search'
+      url: 'https://lamoodcomics.ca/'
     }
   ];
 
@@ -218,13 +215,12 @@ function App() {
 
     const searchPromises = stores.map(async (store) => {
       try {
-        const encodedSearchTerm = encodeURIComponent(cardName.trim());
-        const apiUrl = store.suggestApiUrl.replace('{term}', encodedSearchTerm);
+        // Our Azure Function (api/src/functions/search.js) calls the store's
+        // Shopify search on the server, so the browser never hits CORS.
+        const params = new URLSearchParams({ store: store.key, q: cardName.trim() });
+        const data = await fetchWithRetry(`/api/search?${params}`, 3);
         
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
-        const data = await fetchWithRetry(proxyUrl, 3);
-        
-        const products = data?.resources?.results?.products || [];
+        const products = data?.products || [];
         
         const results: CardResult[] = products
           .filter((product: any) => product.available === true)
@@ -237,11 +233,11 @@ function App() {
           .map((product: any) => ({
             store: store.name,
             name: product.title || 'Unknown Card',
-            priceMin: parseFloat(product.price_min || '0'),
-            priceMax: parseFloat(product.price_max || '0'),
+            priceMin: product.priceMin || 0,
+            priceMax: product.priceMax || 0,
             availability: 'In Stock',
-            url: product.url ? `${store.url.replace(/\/$/, '')}${product.url}` : store.url,
-            image: product.image || product.featured_image?.url,
+            url: product.url || store.url,
+            image: product.image || undefined,
             condition: 'NM'
           }));
         
